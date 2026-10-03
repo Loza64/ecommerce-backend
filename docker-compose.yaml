@@ -1,0 +1,20 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nestjs-app-template-api
+    restart: unless-stopped
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
+    networks:
+      - postgres_network
+      - redis_network
+
+networks:
+  postgres_network:
+    external: true
+  redis_network:
+    external: true

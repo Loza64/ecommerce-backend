@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+
+IFS= read -r commit_message < "$1"
+
+case "$commit_message" in
+  feat:*|fix:*|update:*|docs:*|style:*|refactor:*|test:*|chore:*|build:*|ci:*|perf:*|revert:*)
+    description=${commit_message#*:}
+    case "$description" in
+      " "?*) exit 0 ;;
+    esac
+    ;;
+esac
+
+{
+  echo "Invalid commit message: $commit_message"
+  echo "Use: type: description"
+  echo "Allowed types: feat, fix, update, docs, style, refactor, test, chore, build, ci, perf, revert"
+  exit 1
+}
