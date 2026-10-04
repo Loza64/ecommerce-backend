@@ -1,6 +1,7 @@
-import { Column, Entity, Index } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from 'src/common/entity/base';
 import { numericTransformer } from 'src/common/transformers/numeric.transformer';
+import { User } from 'src/modules/user/domain/entity/user.entity';
 
 export enum DiscountType {
   PERCENTAGE = 'percentage',
@@ -19,7 +20,6 @@ export class Coupon extends BaseEntity {
   @Column({ type: 'enum', enum: DiscountType, nullable: false })
   discountType!: DiscountType;
 
-  /** percentage: 0-100 | fixed: monto en la moneda de la tienda */
   @Column({
     type: 'decimal',
     precision: 12,
@@ -31,4 +31,21 @@ export class Coupon extends BaseEntity {
 
   @Column({ type: 'timestamptz', nullable: false })
   expirationDate!: Date;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'seller_id' })
+  seller: User | null = null;
+
+  @Column({
+    name: 'seller_id',
+    type: 'int',
+    nullable: true,
+  })
+  sellerId!: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  maxUses: number | null = null;
+
+  @Column({ type: 'int', nullable: true })
+  maxUsesPerUser: number | null = null;
 }

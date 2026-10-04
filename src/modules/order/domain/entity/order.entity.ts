@@ -10,6 +10,7 @@ import { BaseEntity } from 'src/common/entity/base';
 import { numericTransformer } from 'src/common/transformers/numeric.transformer';
 import { User } from 'src/modules/user/domain/entity/user.entity';
 import { Cart } from 'src/modules/cart/domain/entity/cart.entity';
+import { Coupon } from 'src/modules/coupon/domain/entity/coupon.entity';
 import { OrderItem } from './order-item.entity';
 
 export enum OrderStatus {
@@ -67,6 +68,12 @@ export class Order extends BaseEntity {
 
   @Column({ type: 'varchar', length: 3 })
   currency!: string;
+
+  /** Cupón usado: de aquí se cuentan los usos (pedidos pendientes o pagados) */
+  @Index('idx_orders_coupon')
+  @ManyToOne(() => Coupon, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'coupon_id' })
+  coupon: Coupon | null = null;
 
   /** Snapshot del cupón aplicado */
   @Column({ type: 'varchar', length: 50, nullable: true })

@@ -17,8 +17,13 @@ import { fromCents, toCents } from 'src/common/helpers/money';
 import { StripeService } from 'src/integrations/stripe/stripe.service';
 import { Cart, CartStatus } from 'src/modules/cart/domain/entity/cart.entity';
 import { CartItem } from 'src/modules/cart/domain/entity/cart-item.entity';
-import { computeTotals } from 'src/modules/cart/cart-pricing';
+import {
+  allocateCents,
+  computeTotals,
+  eligibleSubtotalCents,
+} from 'src/modules/cart/cart-pricing';
 import { Coupon } from 'src/modules/coupon/domain/entity/coupon.entity';
+import { assertCouponUsable } from 'src/modules/coupon/helpers/coupon-usage';
 import { ProductVariant } from 'src/modules/product/domain/entity/product-variant.entity';
 import { User } from 'src/modules/user/domain/entity/user.entity';
 import { Order, OrderStatus } from '../domain/entity/order.entity';
@@ -68,7 +73,7 @@ export class OrderService {
       where: { user: { id: user.id }, status: CartStatus.ACTIVE },
       relations: {
         items: { productVariant: { product: { seller: true } } },
-        coupons: { coupon: true },
+        coupons: { coupon: { seller: true } },
       },
     });
     if (!cart || cart.items.length === 0)
@@ -110,15 +115,57 @@ export class OrderService {
         );
     }
 
-    const totals = computeTotals(
-      cart.items.map((i) => ({
-        unitPrice: i.priceAtAddition,
-        quantity: i.quantity,
-      })),
-      coupon,
-    );
+    const lines = cart.items.map((i) => ({
+      unitPrice: i.priceAtAddition,
+      quantity: i.quantity,
+      sellerId: i.productVariant.product.seller.id,
+    }));
+    const rule = coupon ? { ...coupon, sellerId: coupon.seller?.id } : null;
+    if (rule && eligibleSubtotalCents(lines, rule) <= 0)
+      throw new ConflictException(
+        'El cupón no aplica a los productos de tu carrito. Quítalo para continuar.',
+      );
+    const totals = computeTotals(lines, rule);
+
+    // Cupón de vendedor: el descuento lo asume ese vendedor, repartido entre
+    // sus líneas para que sus ventas muestren el importe neto.
+    const lineDiscountCents = new Map<number, number>();
+    if (coupon?.seller && totals.discountCents > 0) {
+      const sellerId = coupon.seller.id;
+      const own = cart.items.filter(
+        (i) => i.productVariant.product.seller.id === sellerId,
+      );
+      const shares = allocateCents(
+        own.map((i) => toCents(i.priceAtAddition) * i.quantity),
+        totals.discountCents,
+      );
+      own.forEach((item, index) =>
+        lineDiscountCents.set(item.id, shares[index]),
+      );
+    }
 
     const orderId = await this.dataSource.transaction(async (manager) => {
+      // Bloquea el cupón: los checkouts concurrentes con el mismo cupón se
+      // serializan, así los límites de uso no se pueden superar por carrera.
+      if (coupon) {
+        const locked = await manager.findOne(Coupon, {
+          where: { id: coupon.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!locked || locked.expirationDate.getTime() <= Date.now())
+          throw new ConflictException(
+            'El cupón del carrito ya no es válido. Quítalo para continuar.',
+          );
+        if (
+          locked.discountType !== coupon.discountType ||
+          locked.discountValue !== coupon.discountValue
+        )
+          throw new ConflictException(
+            'El cupón cambió. Revisa tu carrito antes de pagar.',
+          );
+        await assertCouponUsable(manager, locked, user.id);
+      }
+
       // evita doble checkout concurrente del mismo carrito
       const converted = await manager.update(
         Cart,
@@ -164,6 +211,7 @@ export class OrderService {
           discountTotal: fromCents(totals.discountCents),
           total: fromCents(totals.totalCents),
           currency: this.currency,
+          coupon: coupon ? { id: coupon.id } : null,
           couponCode: coupon?.code ?? null,
         }),
       );
@@ -180,6 +228,7 @@ export class OrderService {
             attributes: item.productVariant.attributes,
             quantity: item.quantity,
             unitPrice: item.priceAtAddition,
+            discountAmount: fromCents(lineDiscountCents.get(item.id) ?? 0),
           }),
         ),
       );

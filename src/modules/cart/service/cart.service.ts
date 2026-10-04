@@ -13,6 +13,8 @@ import {
   Repository,
 } from 'typeorm';
 import { CouponService } from 'src/modules/coupon/service/coupon.service';
+import { assertCouponUsable } from 'src/modules/coupon/helpers/coupon-usage';
+import { eligibleSubtotalCents } from '../cart-pricing';
 import { ProductVariant } from 'src/modules/product/domain/entity/product-variant.entity';
 import { Cart, CartStatus } from '../domain/entity/cart.entity';
 import { CartItem } from '../domain/entity/cart-item.entity';
@@ -23,7 +25,7 @@ export const CART_RELATIONS: FindOptionsRelations<Cart> = {
   items: {
     productVariant: { product: { seller: true, images: { upload: true } } },
   },
-  coupons: { coupon: true },
+  coupons: { coupon: { seller: true } },
 };
 
 const isUniqueViolation = (err: unknown): boolean =>
@@ -151,10 +153,34 @@ export class CartService {
     return this.getOrCreateActive(userId);
   }
 
-  /** Un carrito aplica un único cupón: aplicar otro reemplaza el anterior */
+  /**
+   * Un carrito aplica un único cupón: aplicar otro reemplaza el anterior.
+   * Valida vigencia, límites de uso y, en cupones de vendedor, que el carrito
+   * tenga productos de ese vendedor.
+   */
   async applyCoupon(userId: number, code: string): Promise<Cart> {
     const cart = await this.getOrCreateActive(userId);
     const coupon = await this.couponService.findValidByCode(code);
+
+    const eligible = eligibleSubtotalCents(
+      cart.items
+        .filter((item) => item.productVariant?.product)
+        .map((item) => ({
+          unitPrice: item.priceAtAddition,
+          quantity: item.quantity,
+          sellerId: item.productVariant.product.seller?.id,
+        })),
+      { ...coupon, sellerId: coupon.seller?.id },
+    );
+    if (eligible <= 0)
+      throw new BadRequestException(
+        coupon.seller
+          ? `Este cupón solo aplica a productos de ${coupon.seller.name}`
+          : 'Agrega productos al carrito para usar el cupón',
+      );
+
+    // chequeo informativo; el definitivo se repite en el checkout con el cupón bloqueado
+    await assertCouponUsable(this.dataSource.manager, coupon, userId);
 
     await this.dataSource.transaction(async (manager) => {
       await manager.delete(CartCoupon, { cartId: cart.id });

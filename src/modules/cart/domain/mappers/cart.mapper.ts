@@ -3,7 +3,11 @@ import { fromCents, toCents } from 'src/common/helpers/money';
 import { Cart } from '../entity/cart.entity';
 import { CartItem } from '../entity/cart-item.entity';
 import { CartItemResponseDto, CartResponseDto } from '../dto/response.dto';
-import { computeTotals, totalsToAmounts } from '../../cart-pricing';
+import {
+  computeTotals,
+  eligibleSubtotalCents,
+  totalsToAmounts,
+} from '../../cart-pricing';
 
 export class CartMapper {
   static itemToResponse(item: CartItem): CartItemResponseDto {
@@ -41,13 +45,13 @@ export class CartMapper {
     const items = (cart.items ?? []).filter((i) => i.productVariant);
     const coupon = cart.coupons?.[0]?.coupon ?? null;
 
-    const totals = computeTotals(
-      items.map((i) => ({
-        unitPrice: i.priceAtAddition,
-        quantity: i.quantity,
-      })),
-      coupon,
-    );
+    const lines = items.map((i) => ({
+      unitPrice: i.priceAtAddition,
+      quantity: i.quantity,
+      sellerId: i.productVariant.product?.seller?.id,
+    }));
+    const rule = coupon ? { ...coupon, sellerId: coupon.seller?.id } : null;
+    const totals = computeTotals(lines, rule);
 
     return {
       id: cart.id,
@@ -62,6 +66,14 @@ export class CartMapper {
             discountType: coupon.discountType,
             discountValue: coupon.discountValue,
             expirationDate: coupon.expirationDate,
+            seller: coupon.seller
+              ? {
+                  id: coupon.seller.id,
+                  username: coupon.seller.username,
+                  name: coupon.seller.name,
+                }
+              : null,
+            applicable: !!rule && eligibleSubtotalCents(lines, rule) > 0,
           }
         : null,
       ...totalsToAmounts(totals),

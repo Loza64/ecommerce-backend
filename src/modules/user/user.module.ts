@@ -18,5 +18,6 @@ import { SuperAdminSeeder } from './seeders/super-admin.seeder';
   ],
   providers: [UserService, SuperAdminSeeder],
   controllers: [UserController],
+  exports: [UserService],
 })
 export class UserModule {}

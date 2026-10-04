@@ -20,6 +20,7 @@ export class OrderMapper {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       lineTotal: fromCents(toCents(item.unitPrice) * item.quantity),
+      discountAmount: item.discountAmount,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       deletedAt: item.deletedAt,
@@ -48,9 +49,13 @@ export class OrderMapper {
   static saleToResponse(item: OrderItem): SaleResponseDto {
     return {
       ...this.itemToResponse(item),
+      netTotal: fromCents(
+        toCents(item.unitPrice) * item.quantity - toCents(item.discountAmount),
+      ),
       order: {
         id: item.order.id,
         status: item.order.status,
+        couponCode: item.order.couponCode,
         paidAt: item.order.paidAt,
         buyer: item.order.buyer
           ? {

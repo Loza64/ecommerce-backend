@@ -19,7 +19,7 @@ import {
 } from 'class-validator';
 import IdDto from 'src/common/dto/id.dto';
 import { IsFlatAttributes } from 'src/common/validators/flat-attributes.validator';
-import type { VariantAttributes } from '../entity/product-variant.entity';
+import { type VariantAttributes } from '../entity/product-variant.entity';
 
 export class CreateVariantDto {
   @IsString()

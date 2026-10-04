@@ -2,7 +2,10 @@ import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
 import { BaseEntity } from 'src/common/entity/base';
 import { numericTransformer } from 'src/common/transformers/numeric.transformer';
 import { User } from 'src/modules/user/domain/entity/user.entity';
-import * as productVariantEntity from 'src/modules/product/domain/entity/product-variant.entity';
+import {
+  ProductVariant,
+  type VariantAttributes,
+} from 'src/modules/product/domain/entity/product-variant.entity';
 import { Order } from './order.entity';
 
 /** Línea del pedido con snapshot del producto al momento de la compra */
@@ -15,12 +18,9 @@ export class OrderItem extends BaseEntity {
   @JoinColumn({ name: 'order_id' })
   order!: Order;
 
-  @ManyToOne(() => productVariantEntity.ProductVariant, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
+  @ManyToOne(() => ProductVariant, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'product_variant_id' })
-  productVariant: productVariantEntity.ProductVariant | null = null;
+  productVariant: ProductVariant | null = null;
 
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'seller_id' })
@@ -33,7 +33,7 @@ export class OrderItem extends BaseEntity {
   sku!: string;
 
   @Column({ type: 'jsonb', default: () => "'{}'" })
-  attributes: productVariantEntity.VariantAttributes = {};
+  attributes: VariantAttributes = {};
 
   @Column({ type: 'int' })
   quantity!: number;
@@ -45,4 +45,17 @@ export class OrderItem extends BaseEntity {
     transformer: numericTransformer,
   })
   unitPrice!: number;
+
+  /**
+   * Descuento de esta línea cuando el cupón es de vendedor (lo asume él).
+   * Con cupones de la plataforma es 0: el vendedor cobra el precio completo.
+   */
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  discountAmount: number = 0;
 }

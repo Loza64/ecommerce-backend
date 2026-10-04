@@ -10,6 +10,8 @@ export class OrderItemResponseDto extends BaseResponse {
   quantity!: number;
   unitPrice!: number;
   lineTotal!: number;
+  /** Descuento de esta línea cuando el cupón es de vendedor; 0 en otro caso */
+  discountAmount!: number;
 }
 
 export class OrderResponseDto extends BaseResponse {
@@ -31,9 +33,12 @@ export class CheckoutResponseDto {
 
 /** Vista del vendedor: sus items vendidos en pedidos pagados */
 export class SaleResponseDto extends OrderItemResponseDto {
+  /** lineTotal − discountAmount: lo que realmente cobra el vendedor por la línea */
+  netTotal!: number;
   order!: {
     id: number;
     status: OrderStatus;
+    couponCode: string | null;
     paidAt: Date | null;
     buyer: { id: number; username: string; name: string } | null;
   };

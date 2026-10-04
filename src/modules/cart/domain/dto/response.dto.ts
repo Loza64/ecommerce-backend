@@ -26,6 +26,10 @@ export class CartResponseDto extends BaseResponse {
     discountType: DiscountType;
     discountValue: number;
     expirationDate: Date;
+    /** Vendedor dueño del cupón; null = cupón de la plataforma */
+    seller: { id: number; username: string; name: string } | null;
+    /** false si el carrito ya no tiene productos a los que aplique (descuento 0) */
+    applicable: boolean;
   } | null;
   subtotal!: number;
   discount!: number;
